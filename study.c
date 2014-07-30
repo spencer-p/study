@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdbool.h>
 #include <string.h>
+#include <locale.h>
 #include "dialog.h"
 
 typedef struct {
@@ -24,9 +25,20 @@ char *getBack(int index);
 
 void multipleChoice();
 void freeResponse();
+void study();
 
 
-int main() {
+int main(int argc, char *argv[]) {
+
+    if (argc != 1) {
+        FILE *input = fopen(argv[1], "r");
+        if (input != NULL) {
+            readDeck(input);
+            fclose(input);
+        }
+    }
+
+    setlocale(LC_ALL, "");
 
     initscr();
     keypad(stdscr, true);
@@ -37,9 +49,15 @@ int main() {
 
     int choice;
 
-    char menuPrompt[64] = "What would you like to do?";
+    char menuPrompt[64];
+    if (deckName != NULL) {
+        sprintf(menuPrompt, "[%s] What would you like to do?", deckName);
+    }
+    else {
+        sprintf(menuPrompt, "What would you like to do?");
+    }
 
-    while ((choice = choose(menuPrompt, "Load deck", "Multiple choice", "Free response", NULL)) != -1) {
+    while ((choice = choose(menuPrompt, 5, "Load deck", "Multiple choice", "Free response", "Study", "Swap back/front")) != -1) {
         if (choice == 1) {
             char *file = prompt("What is the path to your deck file?");
             FILE *input = fopen(file, "r");
@@ -55,14 +73,22 @@ int main() {
             free(file);
         }
         else if (choice == 2) {
+            resetChoice();
             multipleChoice();
         }
         else if (choice == 3) {
             freeResponse();
         }
+        else if (choice == 4) {
+            study();
+        }
+        else if (choice == 5) {
+            backIsFront = (backIsFront) ? false : true;
+        }
         if (deckName != NULL) {
             sprintf(menuPrompt, "[%s] What would you like to do?", deckName);
         }
+        resetChoice();
     }
 
     endwin();
@@ -167,7 +193,7 @@ void multipleChoice() {
 
         char msg[64];
         sprintf(msg, "%d. %s", i+1, getFront(answerindex));
-        int input = choose(msg, answer[0], answer[1], answer[2], answer[3]);
+        int input = choose(msg, 4, answer[0], answer[1], answer[2], answer[3]);
 
         if (input == answerplace+1) {
             score++;
@@ -212,7 +238,7 @@ void freeResponse() {
             else {
                 do {
                     free(response);
-                    sprintf(msg, "Sorry, it was \"%s.\" Please type the correct answer.", getBack(index));
+                    sprintf(msg, "Sorry, it was \"%s.\"\n  Please type the correct answer.", getBack(index));
                     response = prompt(msg);
                     if (response == NULL) {
                         break;
@@ -227,4 +253,45 @@ void freeResponse() {
     sprintf(msg, "You got %d of %d correct!", score, questions);
     say(msg);
     free(answers);
+}
+
+void study() {
+    short *correct = calloc(cards, sizeof(short));
+    int remaining = cards;
+
+    while (remaining) {
+        int index;
+
+        do {
+            index = rand()%cards;
+        } while (correct[index] == 2);
+
+        char msg[128];
+        sprintf(msg, "(%d/%d | %s ○ ) %s", cards-remaining, cards, (correct[index])?"●":"○", getFront(index));
+        
+        char *response = prompt(msg);
+        if (response) {
+            if (strcmp(response, getBack(index)) == 0) {
+                correct[index]++;
+                if (correct[index] == 2) {
+                    remaining--;
+                }
+                sprintf(msg, "(%d/%d | %s ) %s\n\n    %s", cards-remaining, cards, (correct[index] == 1)?"● ○":"● ●", getFront(index), getBack(index));
+                show(msg, 0.75);
+            }
+            else {
+                correct[index] = 0;
+                do {
+                    free(response);
+                    sprintf(msg, "Sorry, it was \"%s.\"\n  Please type the correct answer.", getBack(index));
+                    response = prompt(msg);
+                    if (response == NULL) {
+                        break;
+                    }
+                } while (strcmp(response, getBack(index)) != 0); 
+            }
+            free(response);
+        }
+    }
+    say("Congrats, you learned the whole set.");
 }

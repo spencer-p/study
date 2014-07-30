@@ -1,94 +1,104 @@
 #include "dialog.h"
 #include <ncurses.h>
 #include <stdlib.h>
+#include <stdarg.h>
+#include <unistd.h>
 
 typedef struct {
     int x, y;
 } point;
 
-WINDOW *drawBox(void) {
+short dialogChoice = 1;
+ 
+WINDOW *makeWindow(void) {
     WINDOW *window = newwin(LINES-2, COLS-2, 1, 1);
-    box(window, 0, 0);
     keypad(window, true);
     return window;
 }
 
-int choose(char *message, char *opt1, char *opt2, char *opt3, char *opt4) {
+int charcount(char *str, char c) {
+    char count = 0;
+    for (int i = 0; str[i] != '\0'; i++) {
+        count += (str[i] == c) ? 1 : 0;
+    }
+    return count;
+}
 
-    WINDOW *window = drawBox();
+void resetChoice() {
+    dialogChoice = 1;
+}
+
+int choose(char *message, int optc, ...) {
+
+    WINDOW *window = makeWindow();
     noecho();
     curs_set(0);
-    
+
     mvwprintw(window, 2, 2, "%s", message);
 
-    mvwprintw(window, 4, 4, "%s", opt1);
-    mvwprintw(window, 6, 4, "%s", opt2);
-    mvwprintw(window, 8, 4, "%s", (opt3 != NULL) ? opt3 : "");
-    mvwprintw(window, 10, 4, "%s", (opt4 != NULL) ? opt4 : "");
+    va_list args;
+    va_start(args, optc);
+    char **options = malloc(optc*sizeof(char*));
+    for (int i = 0; i < optc; i++) {
+        options[i] = va_arg(args, char*);
+        mvwprintw(window, 4+(2*i), 4, "%s", options[i]);
+    }
+    va_end(args);
 
-    mvwprintw(window, 4, 2, ">");
+    if (dialogChoice > optc) {
+        dialogChoice = optc;
+    }
+    
+    mvwprintw(window, 4+(2*(dialogChoice-1)), 2, ">");
+    box(window, 0, 0);
     wrefresh(window);
 
-    int c, choice = 1, prev = 1;
+    int c, prev = dialogChoice;
 
     while ((c=getch()) != '\n') {
         switch (c) {
             case KEY_DOWN:
             case 'j':
             case 'J':
-                choice += (choice == 4) ? 0 : 1;
+                dialogChoice += (dialogChoice == optc) ? 0 : 1;
                 break;
             case KEY_UP:
             case 'k':
             case 'K':
-                choice -= (choice == 1) ? 0 : 1;
-                break;
-            case '1':
-                choice = 1;
-                break;
-            case '2':
-                choice = 2;
-                break;
-            case '3':
-                choice = 3;
-                break;
-            case '4':
-                choice = 4;
+                dialogChoice -= (dialogChoice == 1) ? 0 : 1;
                 break;
             case 27: //escape key
             case 'q':
-                wclear(window);
+            case 'Q':
                 wrefresh(window);
                 delwin(window);
                 return -1;
                 break;
         }
         
-        if ((choice == 3 && opt3 == NULL) || (choice == 4 && opt4 == NULL)) {
-            choice = prev;
-        }
-
         mvwprintw(window, 4+(2*(prev-1)), 2, " ");
-        prev = choice;
-        mvwprintw(window, 4+(2*(choice-1)), 2, ">");
+        prev = dialogChoice;
+        mvwprintw(window, 4+(2*(dialogChoice-1)), 2, ">");
         wrefresh(window);
     }
 
-    wclear(window);
     wrefresh(window);
     delwin(window);
 
-    return choice;
+    return dialogChoice;
 }
 
 char *prompt(char *message) {
 
-    WINDOW *window = drawBox();
+    WINDOW *window = makeWindow();
     noecho();
     curs_set(1);
 
+    int lines = charcount(message, '\n');
+
     mvwprintw(window, 2, 2, "%s", message);
-    wmove(window, 4, 4);
+    box(window, 0, 0);
+    wmove(window, 4+lines, 4);
 
     wrefresh(window);
 
@@ -105,11 +115,10 @@ char *prompt(char *message) {
                     i--;
                     answer = realloc(answer, (i+1)*sizeof(char));
                     answer[i] = '\0';
-                    mvwaddch(window, 4, 4+i, ' ');
+                    mvwaddch(window, 4+lines, 4+i, ' ');
                 }
                 break;
             case 27: //escape key
-                wclear(window);
                 wrefresh(window);
                 delwin(window);
                 free(answer);
@@ -121,11 +130,10 @@ char *prompt(char *message) {
                 answer[i] = '\0';
                 break;
         }
-        mvwprintw(window, 4, 4, "%s", answer);
+        mvwprintw(window, 4+lines, 4, "%s", answer);
         wrefresh(window);
     }
 
-    wclear(window);
     wrefresh(window);
     delwin(window);
     return answer;
@@ -133,12 +141,15 @@ char *prompt(char *message) {
 
 void say(char *message) {
 
-    WINDOW *window = drawBox();
+    WINDOW *window = makeWindow();
     noecho();
     curs_set(0);
+
+    int lines = charcount(message, '\n');
     
     mvwprintw(window, 2, 2, "%s", message);
-    mvwprintw(window, 4, 2, "[Enter]");
+    mvwprintw(window, 4+lines, 2, "[Enter]");
+    box(window, 0, 0);
 
     wrefresh(window);
     
@@ -147,7 +158,24 @@ void say(char *message) {
         //do nothing
     }
 
-    wclear(window);
+    wrefresh(window);
+    delwin(window);
+    return;
+}
+
+void show(char *message, double sec) {
+
+    WINDOW *window = makeWindow();
+    noecho();
+    curs_set(0);
+
+    mvwprintw(window, 2, 2, "%s", message);
+    box(window, 0, 0);
+
+    wrefresh(window);
+    
+    usleep(sec*1000000);
+
     wrefresh(window);
     delwin(window);
     return;

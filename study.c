@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <locale.h>
+#include <math.h>
 #include "dialog.h"
 
 typedef struct {
@@ -191,23 +192,30 @@ void multipleChoice() {
             }
         }
 
-        char msg[64];
+        //log10+1 for int length, 2 for ". " and strlen, 1 for null
+        char *msg = malloc((log10(i+1)+1+2+strlen(getFront(answerindex))+1)*sizeof(char));
         sprintf(msg, "%d. %s", i+1, getFront(answerindex));
         int input = choose(msg, 4, answer[0], answer[1], answer[2], answer[3]);
+        free(msg);
 
         if (input == answerplace+1) {
             score++;
         }
         else {
+            // strlen("Sorry, the answer was \".\"") == 25
+            msg = malloc((25+strlen(answer[answerplace])+1)*sizeof(char));
             sprintf(msg, "Sorry, the answer was \"%s.\"", answer[answerplace]);
             say(msg);
+            free(msg);
         }
         free(chosen);
 
     }
-    char msg[32];
+    //strlen("You got  of  correct!") == 21
+    char *msg = malloc((21+log10(score)+1+log10(questions)+1+1)*sizeof(char));
     sprintf(msg, "You got %d of %d correct!", score, questions);
     say(msg);
+    free(msg);
     free(chosenans);
     return;
 }
